@@ -19,10 +19,11 @@ import java.util.concurrent.*;
 public class StartIndexing implements StartIndService{
 
     private final SitesList sites;
+    private int count = 3;
+    private static boolean active;
     private final SiteRepository siteRepository;
     private final PageRepository pageRepository;
-    private static final int numberOfCores = Runtime.getRuntime().availableProcessors();
-
+    private final int numberOfCores = Runtime.getRuntime().availableProcessors();
 
     @Autowired
     public StartIndexing(SitesList sites, SiteRepository siteRepository, PageRepository pageRepository) {
@@ -40,6 +41,8 @@ public class StartIndexing implements StartIndService{
     }
 
     private void startUpdate(){
+        count = 0;
+        active = true;
         List<SiteYAML> sitesList = sites.getSites();
         for (SiteYAML siteYAML : sitesList) {
             new Thread(() -> updateSite(siteYAML)).start();
@@ -59,18 +62,27 @@ public class StartIndexing implements StartIndService{
         siteRepository.save(newSite);
 
         try{
-
             ListUrl listUrl = new ListUrl(newSite, newSite, pageRepository, siteRepository);
-            TreeSet<String> siteMap;
-            siteMap = new ForkJoinPool(numberOfCores).invoke(listUrl);
-            System.out.println(siteMap);
-            System.out.println(siteMap.size());
-
-            newSite.setSiteStatus(SiteStatus.INDEXED);
+            new ForkJoinPool(numberOfCores).invoke(listUrl);
+            if (newSite.getSiteStatus().equals(SiteStatus.INDEXING)){
+                newSite.setSiteStatus(SiteStatus.INDEXED);
+                siteRepository.save(newSite);
+            }
         } catch (Exception ex){
-            newSite.setSiteStatus(SiteStatus.FAILED);
+            ex.printStackTrace();
         }
-        newSite.setStatusTime(LocalDateTime.now());
-        siteRepository.save(newSite);
+        count++;
+    }
+
+    public void stopIndexing(){
+        active = false;
+    }
+
+    public static boolean isActive() {
+        return active;
+    }
+
+    public boolean isIndexing(){
+        return count != sites.getSites().size();
     }
 }

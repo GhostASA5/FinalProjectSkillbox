@@ -9,4 +9,8 @@ import javax.transaction.Transactional;
 @Transactional
 public interface PageRepository extends JpaRepository<Page, Integer> {
     void deleteAllBySiteId(Site siteId);
+
+    boolean existsByPathAndSiteId(String path, Site siteId);
+
+    boolean existsByPath(String path);
 }
