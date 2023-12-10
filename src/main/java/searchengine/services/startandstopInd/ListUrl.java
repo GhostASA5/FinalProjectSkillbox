@@ -1,4 +1,4 @@
-package searchengine.services;
+package searchengine.services.startandstopInd;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -43,8 +43,8 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
         String main = mainSite.getUrl();
         String url = site.getUrl();
         List<ListUrl> setUrlList = new ArrayList<>();
-        System.out.println(StartIndexing.isActive());
-        if (StartIndexing.isActive()){
+        System.out.println(StartAndStopIndexing.isActive());
+        if (StartAndStopIndexing.isActive()){
             String urlPart = url.replace(main, "");
             urlSet.add(urlPart);
             Elements elements;
@@ -100,8 +100,12 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
                     Thread.currentThread().interrupt();
                     String error = ex.getMessage();
                     ex.printStackTrace();
+                    if(error.equals("Read timed out")){
+                        mainSite.setLastError("Индексация остановлена из-за долгого ответа сервера. Проверьте интернет соединение");
+                    } else {
+                        mainSite.setLastError(error);
+                    }
                     mainSite.setSiteStatus(SiteStatus.FAILED);
-                    mainSite.setLastError(error);
                     mainSite.setStatusTime(LocalDateTime.now());
                     siteRepository.save(mainSite);
                 }

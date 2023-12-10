@@ -36,6 +36,9 @@ public class Site {
     @OneToMany(mappedBy = "siteId")
     private List<Page> pages = new ArrayList<>();
 
+    @OneToMany(mappedBy = "siteId")
+    private List<Lemma> lemmas = new ArrayList<>();
+
     public Integer getId() {
         return id;
     }
@@ -90,5 +93,13 @@ public class Site {
 
     public void setPages(List<Page> pages) {
         this.pages = pages;
+    }
+
+    public List<Lemma> getLemmas() {
+        return lemmas;
+    }
+
+    public void setLemmas(List<Lemma> lemmas) {
+        this.lemmas = lemmas;
     }
 }

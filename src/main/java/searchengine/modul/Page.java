@@ -1,6 +1,9 @@
 package searchengine.modul;
 
 import javax.persistence.*;
+import javax.persistence.Index;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "page", indexes = {
@@ -26,6 +29,9 @@ public class Page {
 
     @Column(columnDefinition = "MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci", nullable = false)
     private String content;
+
+    @OneToMany(mappedBy = "pageId")
+    private List<searchengine.modul.Index> indices = new ArrayList<>();
 
     public Integer getId() {
         return id;
@@ -65,5 +71,13 @@ public class Page {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public List<searchengine.modul.Index> getIndices() {
+        return indices;
+    }
+
+    public void setIndices(List<searchengine.modul.Index> indices) {
+        this.indices = indices;
     }
 }
