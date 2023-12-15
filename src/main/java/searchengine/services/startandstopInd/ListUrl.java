@@ -15,6 +15,7 @@ import org.jsoup.select.Elements;
 import searchengine.modul.Page;
 import searchengine.modul.Site;
 import searchengine.modul.SiteStatus;
+import searchengine.services.indexPage.IndexPageService;
 import searchengine.services.repository.PageRepository;
 import searchengine.services.repository.SiteRepository;
 
@@ -28,13 +29,15 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
     private static final String ATTRIBUTE_KEY = "href";
     private final PageRepository pageRepository;
     private final SiteRepository siteRepository;
+    private final IndexPageService indexPageService;
 
 
-    public ListUrl(Site site, Site mainSite, PageRepository pageRepository, SiteRepository siteRepository) {
+    public ListUrl(Site site, Site mainSite, PageRepository pageRepository, SiteRepository siteRepository, IndexPageService indexPageService) {
         this.site = site;
         this.mainSite = mainSite;
         this.pageRepository = pageRepository;
         this.siteRepository = siteRepository;
+        this.indexPageService = indexPageService;
     }
 
     @Override
@@ -43,8 +46,12 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
         String main = mainSite.getUrl();
         String url = site.getUrl();
         List<ListUrl> setUrlList = new ArrayList<>();
-        System.out.println(StartAndStopIndexing.isActive());
-        if (StartAndStopIndexing.isActive()){
+        if (!StartAndStopIndexing.isActive()) {
+            mainSite.setSiteStatus(SiteStatus.FAILED);
+            mainSite.setLastError("Индексация остановлена пользователем");
+            mainSite.setStatusTime(LocalDateTime.now());
+            siteRepository.save(mainSite);
+        } else {
             String urlPart = url.replace(main, "");
             urlSet.add(urlPart);
             Elements elements;
@@ -62,12 +69,15 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
                             .ignoreContentType(true);
 
                     document = connection.get();
+
                     if (!urlPart.isEmpty()){
                         page.setCode(Jsoup.connect(url).execute().statusCode());
                         page.setContent(document.outerHtml());
                         pageRepository.save(page);
                         mainSite.setStatusTime(LocalDateTime.now());
                         siteRepository.save(mainSite);
+                        //System.out.println(url);
+                        //indexPageService.indexPage(url);
                     }
 
                     elements = document.select(CSS_QUERY);
@@ -80,12 +90,18 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
                                 && !pageRepository.existsByPathAndSiteId(attributeUrl.replace(main, ""), mainSite)
                                 && !URL_SET.contains(attributeUrl)
                                 && !attributeUrl.contains("#")) {
-                            ListUrl setUrl = new ListUrl(site1, mainSite, pageRepository, siteRepository);
+                            ListUrl setUrl = new ListUrl(site1, mainSite, pageRepository, siteRepository, indexPageService);
                             setUrl.fork();
                             setUrlList.add(setUrl);
                             URL_SET.add(attributeUrl);
                         }
                     }
+                    for (ListUrl link : setUrlList) {
+                        TreeSet<String> linkResult = link.join();
+                        linkResult.remove(main.trim());
+                        urlSet.addAll(linkResult);
+                    }
+
                 } catch (HttpStatusException ex) {
                     int statusCode = ex.getStatusCode();
                     String responseBody = ex.getMessage();
@@ -109,21 +125,8 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
                     mainSite.setStatusTime(LocalDateTime.now());
                     siteRepository.save(mainSite);
                 }
-                for (ListUrl link : setUrlList) {
-                    TreeSet<String> linkResult = link.join();
-                    linkResult.remove(main.trim());
-                    urlSet.addAll(linkResult);
-                }
             }
-
-        } else {
-            Thread.currentThread().interrupt();
-            mainSite.setSiteStatus(SiteStatus.FAILED);
-            mainSite.setLastError("Индексация остановлена пользователем");
-            mainSite.setStatusTime(LocalDateTime.now());
-            siteRepository.save(mainSite);
         }
-
         return urlSet;
     }
 }

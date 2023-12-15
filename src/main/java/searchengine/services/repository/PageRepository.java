@@ -11,4 +11,6 @@ public interface PageRepository extends JpaRepository<Page, Integer> {
     void deleteAllBySiteId(Site siteId);
 
     boolean existsByPathAndSiteId(String path, Site siteId);
+
+    Page findBySiteIdAndPath(Site siteId, String path);
 }

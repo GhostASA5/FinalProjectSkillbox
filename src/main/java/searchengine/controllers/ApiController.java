@@ -44,7 +44,6 @@ public class ApiController {
             response.setResult(false);
             response.setError("Индексация уже запущена");
         } else{
-            ListUrl.URL_SET = new TreeSet<>();
             response = startIndService.beginIndexing();
         }
         return ResponseEntity.ok(response);
