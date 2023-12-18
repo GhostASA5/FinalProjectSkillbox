@@ -1,9 +1,13 @@
 package searchengine.services.startandstopInd;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RecursiveTask;
 
 import org.jsoup.Connection;
@@ -24,7 +28,7 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
 
     private final Site site;
     private final Site mainSite;
-    public static TreeSet<String> URL_SET = new TreeSet<>();
+    public static Set<String> concurentSet = ConcurrentHashMap.newKeySet();
     private static final String CSS_QUERY = "a[href]";
     private static final String ATTRIBUTE_KEY = "href";
     private final PageRepository pageRepository;
@@ -56,78 +60,80 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
             urlSet.add(urlPart);
             Elements elements;
             Document document;
-            boolean pathExists = pageRepository.existsByPathAndSiteId(urlPart, mainSite); // Проверяем наличие пути в базе данных
-            if (!pathExists){
-                Page page = new Page();
-                page.setPath(urlPart);
-                page.setSiteId(mainSite);
-                try {
-                    Thread.sleep(1500);
-                    Connection connection = Jsoup.connect(url)
-                            .userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
-                            .referrer("https://www.google.com")
-                            .ignoreContentType(true);
+            Page page = new Page();
+            page.setPath(urlPart);
+            page.setSiteId(mainSite);
+            try {
+                Thread.sleep(1500);
+                Connection connection = Jsoup.connect(url)
+                        .userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
+                        .referrer("https://www.google.com")
+                        .ignoreContentType(true);
 
-                    document = connection.get();
-
-                    if (!urlPart.isEmpty()){
-                        page.setCode(Jsoup.connect(url).execute().statusCode());
-                        page.setContent(document.outerHtml());
-                        pageRepository.save(page);
-                        mainSite.setStatusTime(LocalDateTime.now());
-                        siteRepository.save(mainSite);
-                        //System.out.println(url);
-                        //indexPageService.indexPage(url);
-                    }
-
-                    elements = document.select(CSS_QUERY);
-                    for (Element element : elements) {
-                        String attributeUrl = element.absUrl(ATTRIBUTE_KEY);
-                        Site site1 = new Site();
-                        site1.setUrl(attributeUrl);
-
-                        if (!attributeUrl.isEmpty() && attributeUrl.startsWith(url)
-                                && !pageRepository.existsByPathAndSiteId(attributeUrl.replace(main, ""), mainSite)
-                                && !URL_SET.contains(attributeUrl)
-                                && !attributeUrl.contains("#")) {
-                            ListUrl setUrl = new ListUrl(site1, mainSite, pageRepository, siteRepository, indexPageService);
-                            setUrl.fork();
-                            setUrlList.add(setUrl);
-                            URL_SET.add(attributeUrl);
-                        }
-                    }
-                    for (ListUrl link : setUrlList) {
-                        TreeSet<String> linkResult = link.join();
-                        linkResult.remove(main.trim());
-                        urlSet.addAll(linkResult);
-                    }
-
-                } catch (HttpStatusException ex) {
-                    int statusCode = ex.getStatusCode();
-                    String responseBody = ex.getMessage();
-                    document = Jsoup.parse(responseBody);
-                    page.setCode(statusCode);
+                document = connection.get();
+                if (!urlPart.isEmpty()){
+                    page.setCode(Jsoup.connect(url).execute().statusCode());
                     page.setContent(document.outerHtml());
                     pageRepository.save(page);
                     mainSite.setStatusTime(LocalDateTime.now());
                     siteRepository.save(mainSite);
-                    return urlSet;
-                } catch (Exception ex){
-                    Thread.currentThread().interrupt();
-                    String error = ex.getMessage();
-                    ex.printStackTrace();
-                    if(error.equals("Read timed out")){
-                        mainSite.setLastError("Индексация остановлена из-за долгого ответа сервера. Проверьте интернет соединение");
-                    } else {
-                        mainSite.setLastError(error);
-                    }
-                    mainSite.setSiteStatus(SiteStatus.FAILED);
-                    mainSite.setStatusTime(LocalDateTime.now());
-                    siteRepository.save(mainSite);
+                    //System.out.println(url);
+                    //indexPageService.indexPage(url);
                 }
+                elements = document.select(CSS_QUERY);
+                for (Element element : elements) {
+                    String attributeUrl = element.absUrl(ATTRIBUTE_KEY);
+                    Site site1 = new Site();
+                    site1.setUrl(attributeUrl);
+
+                    if (checkUrl(attributeUrl) && !concurentSet.contains(attributeUrl)) {
+                        ListUrl setUrl = new ListUrl(site1, mainSite, pageRepository, siteRepository, indexPageService);
+                        setUrl.fork();
+                        setUrlList.add(setUrl);
+                        concurentSet.add(attributeUrl);
+                    }
+                }
+                for (ListUrl link : setUrlList) {
+                    TreeSet<String> linkResult = link.join();
+                    linkResult.remove(main.trim());
+                    urlSet.addAll(linkResult);
+                }
+
+            } catch (HttpStatusException ex) {
+                int statusCode = ex.getStatusCode();
+                String responseBody = ex.getMessage();
+                document = Jsoup.parse(responseBody);
+                page.setCode(statusCode);
+                page.setContent(document.outerHtml());
+                pageRepository.save(page);
+                mainSite.setStatusTime(LocalDateTime.now());
+                siteRepository.save(mainSite);
+                return urlSet;
+            } catch (Exception ex){
+                Thread.currentThread().interrupt();
+                String error = ex.getMessage();
+                ex.printStackTrace();
+                if(error.equals("Read timed out")){
+                    mainSite.setLastError("Индексация остановлена из-за долгого ответа сервера. Проверьте интернет соединение");
+                } else {
+                    mainSite.setLastError(error);
+                }
+                mainSite.setSiteStatus(SiteStatus.FAILED);
+                mainSite.setStatusTime(LocalDateTime.now());
+                siteRepository.save(mainSite);
             }
+
         }
         return urlSet;
+    }
+
+    private boolean checkUrl(String url) {
+        try {
+            new URL(url);
+            return !url.isEmpty() && url.startsWith(site.getUrl()) && !url.contains("#");
+        } catch (MalformedURLException e) {
+            return false;
+        }
     }
 }
 

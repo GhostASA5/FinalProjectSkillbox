@@ -15,7 +15,6 @@ import searchengine.services.repository.SiteRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.TreeSet;
 import java.util.concurrent.*;
 
 @Service
@@ -52,7 +51,7 @@ public class StartAndStopIndexing implements StartIndService{
     private void startUpdate(){
         count = 0;
         active = true;
-        ListUrl.URL_SET = new TreeSet<>();
+        ListUrl.concurentSet = ConcurrentHashMap.newKeySet();
         indexRepository.deleteAll();
         List<SiteYAML> sitesList = sites.getSites();
         for (SiteYAML siteYAML : sitesList) {
