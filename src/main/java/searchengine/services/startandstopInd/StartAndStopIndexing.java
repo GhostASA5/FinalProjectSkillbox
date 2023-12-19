@@ -51,7 +51,7 @@ public class StartAndStopIndexing implements StartIndService{
     private void startUpdate(){
         count = 0;
         active = true;
-        ListUrl.concurentSet = ConcurrentHashMap.newKeySet();
+        ListUrl.concurrentSet = ConcurrentHashMap.newKeySet();
         indexRepository.deleteAll();
         List<SiteYAML> sitesList = sites.getSites();
         for (SiteYAML siteYAML : sitesList) {

@@ -19,8 +19,8 @@ public class Index {
     @JoinColumn(name = "lemma_id", referencedColumnName = "id", nullable = false)
     private Lemma lemmaId;
 
-    @Column(columnDefinition = "FLOAT", nullable = false)
-    private Float lemma_rank;
+    @Column(name = "lemma_rank", columnDefinition = "FLOAT", nullable = false)
+    private Float lemmaRank;
 
     public Integer getId() {
         return id;
@@ -46,11 +46,11 @@ public class Index {
         this.lemmaId = lemmaId;
     }
 
-    public Float getLemma_rank() {
-        return lemma_rank;
+    public Float getLemmaRank() {
+        return lemmaRank;
     }
 
-    public void setLemma_rank(Float lemma_rank) {
-        this.lemma_rank = lemma_rank;
+    public void setLemmaRank(Float lemmaRank) {
+        this.lemmaRank = lemmaRank;
     }
 }

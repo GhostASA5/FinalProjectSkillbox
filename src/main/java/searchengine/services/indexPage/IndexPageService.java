@@ -17,6 +17,8 @@ import searchengine.services.repository.SiteRepository;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
 public class IndexPageService {
@@ -30,6 +32,7 @@ public class IndexPageService {
     private final SitesList sites;
     private final String[] particles = {"МЕЖД", "ПРЕДЛ", "СОЮЗ"};
     private final LuceneMorphology luceneMorph = new RussianLuceneMorphology();
+    private static final ConcurrentHashMap<String, CopyOnWriteArrayList<Integer>> lemmasConcurrentMap = new ConcurrentHashMap<>();
 
     @Autowired
     public IndexPageService(PageRepository pageRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository, SiteRepository siteRepository, SitesList sites) throws IOException {
@@ -67,29 +70,33 @@ public class IndexPageService {
 
 
     private void saveToDB(HashMap<String, Float> lemmasMap){
-        List<Lemma> lemmaList = new ArrayList<>();
-        List<Index> indexList = new ArrayList<>();
-
         for(String lemma : lemmasMap.keySet()){
+            Integer siteId = siteRepository.getSiteByUrl(mainSiteUrl).getId();
             Lemma oldLemma = lemmaRepository.findByLemmaAndSiteId(lemma, siteRepository.getSiteByUrl(mainSiteUrl));
             Index index = new Index();
-            if (oldLemma == null){
+            if (!containsLemmaInSite(lemma, siteId)){
                 Lemma newLemma = new Lemma();
                 newLemma.setLemma(lemma);
                 newLemma.setFrequency(1);
                 newLemma.setSiteId(siteRepository.getSiteByUrl(mainSiteUrl));
                 oldLemma = newLemma;
+                lemmaRepository.save(oldLemma);
+                CopyOnWriteArrayList<Integer> list = new CopyOnWriteArrayList<>();
+                list.add(siteId);
+                lemmasConcurrentMap.put(lemma, list);
             } else {
                 oldLemma.setFrequency(oldLemma.getFrequency() + 1);
+                lemmaRepository.save(oldLemma);
+                CopyOnWriteArrayList<Integer> lemmasList = lemmasConcurrentMap.get(lemma);
+                lemmasList.add(siteId);
+                lemmasConcurrentMap.put(lemma, lemmasList);
             }
+
             index.setPageId(pageRepository.findBySiteIdAndPath(siteRepository.getSiteByUrl(mainSiteUrl), siteUrl));
             index.setLemmaId(oldLemma);
-            index.setLemma_rank(lemmasMap.get(lemma));
-            lemmaList.add(oldLemma);
-            indexList.add(index);
+            index.setLemmaRank(lemmasMap.get(lemma));
+            indexRepository.save(index);
         }
-        lemmaRepository.saveAll(lemmaList);
-        indexRepository.saveAll(indexList);
     }
 
     private HashMap<String, Float> getAllLemmas(String text){
@@ -144,5 +151,14 @@ public class IndexPageService {
             }
         }
         return false;
+    }
+
+    private boolean containsLemmaInSite(String lemma, Integer siteId) {
+        CopyOnWriteArrayList<Integer> sitesForWord = lemmasConcurrentMap.get(lemma);
+        boolean a;
+        if (sitesForWord!=null){
+            a = sitesForWord.contains(siteId);
+        }
+        return sitesForWord != null && sitesForWord.contains(siteId);
     }
 }

@@ -6,9 +6,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.RecursiveTask;
+import java.util.concurrent.RecursiveAction;
 
 import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
@@ -24,11 +23,11 @@ import searchengine.services.repository.PageRepository;
 import searchengine.services.repository.SiteRepository;
 
 
-public class ListUrl extends RecursiveTask<TreeSet<String>> {
+public class ListUrl extends RecursiveAction {
 
     private final Site site;
     private final Site mainSite;
-    public static Set<String> concurentSet = ConcurrentHashMap.newKeySet();
+    public static Set<String> concurrentSet = ConcurrentHashMap.newKeySet();
     private static final String CSS_QUERY = "a[href]";
     private static final String ATTRIBUTE_KEY = "href";
     private final PageRepository pageRepository;
@@ -45,8 +44,7 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
     }
 
     @Override
-    protected TreeSet<String> compute() {
-        TreeSet<String> urlSet = new TreeSet<>();
+    protected void compute() {
         String main = mainSite.getUrl();
         String url = site.getUrl();
         List<ListUrl> setUrlList = new ArrayList<>();
@@ -57,7 +55,6 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
             siteRepository.save(mainSite);
         } else {
             String urlPart = url.replace(main, "");
-            urlSet.add(urlPart);
             Elements elements;
             Document document;
             Page page = new Page();
@@ -77,8 +74,7 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
                     pageRepository.save(page);
                     mainSite.setStatusTime(LocalDateTime.now());
                     siteRepository.save(mainSite);
-                    //System.out.println(url);
-                    //indexPageService.indexPage(url);
+                    indexPageService.indexPage(url);
                 }
                 elements = document.select(CSS_QUERY);
                 for (Element element : elements) {
@@ -86,17 +82,15 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
                     Site site1 = new Site();
                     site1.setUrl(attributeUrl);
 
-                    if (checkUrl(attributeUrl) && !concurentSet.contains(attributeUrl)) {
+                    if (checkUrl(attributeUrl) && !concurrentSet.contains(attributeUrl)) {
                         ListUrl setUrl = new ListUrl(site1, mainSite, pageRepository, siteRepository, indexPageService);
                         setUrl.fork();
                         setUrlList.add(setUrl);
-                        concurentSet.add(attributeUrl);
+                        concurrentSet.add(attributeUrl);
                     }
                 }
                 for (ListUrl link : setUrlList) {
-                    TreeSet<String> linkResult = link.join();
-                    linkResult.remove(main.trim());
-                    urlSet.addAll(linkResult);
+                    link.join();
                 }
 
             } catch (HttpStatusException ex) {
@@ -108,7 +102,6 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
                 pageRepository.save(page);
                 mainSite.setStatusTime(LocalDateTime.now());
                 siteRepository.save(mainSite);
-                return urlSet;
             } catch (Exception ex){
                 Thread.currentThread().interrupt();
                 String error = ex.getMessage();
@@ -124,7 +117,6 @@ public class ListUrl extends RecursiveTask<TreeSet<String>> {
             }
 
         }
-        return urlSet;
     }
 
     private boolean checkUrl(String url) {
