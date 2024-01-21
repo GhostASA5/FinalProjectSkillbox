@@ -7,14 +7,12 @@ import searchengine.dto.startandstop.StartIndResponse;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.dto.startandstop.StopIndResponse;
 import searchengine.services.indexPage.IndexPageService;
-import searchengine.services.startandstopInd.ListUrl;
 import searchengine.services.startandstopInd.StartIndService;
 import searchengine.services.startandstopInd.StartAndStopIndexing;
 import searchengine.services.statistics.StatisticsService;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.TreeSet;
 
 @RestController
 @RequestMapping("/api")

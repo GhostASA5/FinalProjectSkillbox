@@ -10,6 +10,7 @@ import searchengine.config.SiteYAML;
 import searchengine.config.SitesList;
 import searchengine.modul.Index;
 import searchengine.modul.Lemma;
+import searchengine.modul.Site;
 import searchengine.services.repository.IndexRepository;
 import searchengine.services.repository.LemmaRepository;
 import searchengine.services.repository.PageRepository;
@@ -53,48 +54,31 @@ public class IndexPageService {
                 }
             }
         }
-        try {
-            Document document = Jsoup.connect(url)
-                    .userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
-                    .referrer("https://www.google.com")
-                    .ignoreContentType(true)
-                    .get();
 
-            String parse = Jsoup.parse(document.outerHtml()).text();
-            HashMap<String, Float> lemmasMap = getAllLemmas(parse);
-            saveToDB(lemmasMap);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        Site siteId = siteRepository.getSiteByUrl(mainSiteUrl);
+        String htmlPageCode = pageRepository.findBySiteIdAndPath(siteId, siteUrl).getContent();
+
+        HashMap<String, Float> lemmasMap = getAllLemmas(htmlPageCode);
+        saveToDB(lemmasMap);
     }
 
 
     private void saveToDB(HashMap<String, Float> lemmasMap){
         for(String lemma : lemmasMap.keySet()){
-            Integer siteId = siteRepository.getSiteByUrl(mainSiteUrl).getId();
-            Lemma oldLemma = lemmaRepository.findByLemmaAndSiteId(lemma, siteRepository.getSiteByUrl(mainSiteUrl));
+            Site site = siteRepository.getSiteByUrl(mainSiteUrl);
+            Lemma lemmaDB = lemmaRepository.findByLemmaAndSiteId(lemma, site);
             Index index = new Index();
-            if (!containsLemmaInSite(lemma, siteId)){
-                Lemma newLemma = new Lemma();
-                newLemma.setLemma(lemma);
-                newLemma.setFrequency(1);
-                newLemma.setSiteId(siteRepository.getSiteByUrl(mainSiteUrl));
-                oldLemma = newLemma;
-                lemmaRepository.save(oldLemma);
-                CopyOnWriteArrayList<Integer> list = new CopyOnWriteArrayList<>();
-                list.add(siteId);
-                lemmasConcurrentMap.put(lemma, list);
-            } else {
-                oldLemma.setFrequency(oldLemma.getFrequency() + 1);
-                lemmaRepository.save(oldLemma);
-                CopyOnWriteArrayList<Integer> lemmasList = lemmasConcurrentMap.get(lemma);
-                lemmasList.add(siteId);
-                lemmasConcurrentMap.put(lemma, lemmasList);
-            }
 
-            index.setPageId(pageRepository.findBySiteIdAndPath(siteRepository.getSiteByUrl(mainSiteUrl), siteUrl));
-            index.setLemmaId(oldLemma);
+            if (lemmaDB == null){
+                lemmaDB = new Lemma();
+                lemmaDB.setLemma(lemma);
+                lemmaDB.setSiteId(site);
+            }
+            lemmaDB.incrementFrequency();
+            index.setPageId(pageRepository.findBySiteIdAndPath(site, siteUrl));
+            index.setLemmaId(lemmaDB);
             index.setLemmaRank(lemmasMap.get(lemma));
+            lemmaRepository.save(lemmaDB);
             indexRepository.save(index);
         }
     }

@@ -79,11 +79,11 @@ public class ListUrl extends RecursiveAction {
                 elements = document.select(CSS_QUERY);
                 for (Element element : elements) {
                     String attributeUrl = element.absUrl(ATTRIBUTE_KEY);
-                    Site site1 = new Site();
-                    site1.setUrl(attributeUrl);
+                    Site newSite = new Site();
+                    newSite.setUrl(attributeUrl);
 
                     if (checkUrl(attributeUrl) && !concurrentSet.contains(attributeUrl)) {
-                        ListUrl setUrl = new ListUrl(site1, mainSite, pageRepository, siteRepository, indexPageService);
+                        ListUrl setUrl = new ListUrl(newSite, mainSite, pageRepository, siteRepository, indexPageService);
                         setUrl.fork();
                         setUrlList.add(setUrl);
                         concurrentSet.add(attributeUrl);

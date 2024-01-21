@@ -26,6 +26,14 @@ public class Lemma {
     @OneToMany(mappedBy = "lemmaId")
     private List<Index> indices = new ArrayList<>();
 
+    public void incrementFrequency(){
+        if(frequency == null){
+            frequency = 1;
+        } else{
+            frequency++;
+        }
+    }
+
     public Integer getId() {
         return id;
     }
