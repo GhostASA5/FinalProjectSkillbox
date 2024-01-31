@@ -2,15 +2,14 @@ package searchengine.services.indexPage;
 
 import org.apache.lucene.morphology.LuceneMorphology;
 import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import searchengine.config.SiteYAML;
+import searchengine.config.Site;
 import searchengine.config.SitesList;
+import searchengine.dto.indexpage.IndexPageResponse;
 import searchengine.modul.Index;
 import searchengine.modul.Lemma;
-import searchengine.modul.Site;
+import searchengine.modul.Page;
 import searchengine.services.repository.IndexRepository;
 import searchengine.services.repository.LemmaRepository;
 import searchengine.services.repository.PageRepository;
@@ -18,11 +17,9 @@ import searchengine.services.repository.SiteRepository;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 @Service
-public class IndexPageService {
+public class IndexPageService implements IndexService{
 
     private final PageRepository pageRepository;
     private final LemmaRepository lemmaRepository;
@@ -33,7 +30,6 @@ public class IndexPageService {
     private final SitesList sites;
     private final String[] particles = {"МЕЖД", "ПРЕДЛ", "СОЮЗ"};
     private final LuceneMorphology luceneMorph = new RussianLuceneMorphology();
-    private static final ConcurrentHashMap<String, CopyOnWriteArrayList<Integer>> lemmasConcurrentMap = new ConcurrentHashMap<>();
 
     @Autowired
     public IndexPageService(PageRepository pageRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository, SiteRepository siteRepository, SitesList sites) throws IOException {
@@ -44,30 +40,47 @@ public class IndexPageService {
         this.sites = sites;
     }
 
-    public void indexPage(String url){
-        for(SiteYAML siteYAML : sites.getSites()){
-            if (url.contains(siteYAML.getUrl())){
-                siteUrl = url.replaceAll(siteYAML.getUrl(), "");
-                mainSiteUrl = siteYAML.getUrl();
+    @Override
+    public IndexPageResponse indexPage(String url){
+        IndexPageResponse response = new IndexPageResponse();
+        findMainSite(url);
+        if (mainSiteUrl == null){
+            response.setResult(false);
+            response.setError("Данная страница находится за пределами сайтов, указанных в конфигурационном файле");
+        } else {
+            response.setResult(true);
+            searchengine.modul.Site siteId = siteRepository.getSiteByUrl(mainSiteUrl);
+            String htmlPageCode = pageRepository.findBySiteIdAndPath(siteId, siteUrl).getContent();
+            HashMap<String, Float> lemmasMap = getAllLemmas(htmlPageCode);
+            saveToDB(lemmasMap, pageRepository.findBySiteIdAndPath(siteId, siteUrl));
+        }
+        return response;
+    }
+
+    @Override
+    public void indexPage(String url, Page page) {
+        findMainSite(url);
+        String htmlPageCode = page.getContent();
+        HashMap<String, Float> lemmasMap = getAllLemmas(htmlPageCode);
+        saveToDB(lemmasMap, page);
+    }
+
+    private void findMainSite(String url){
+        for(Site site : sites.getSites()){
+            if (url.contains(site.getUrl())){
+                siteUrl = url.replaceAll(site.getUrl(), "");
+                mainSiteUrl = site.getUrl();
                 if(siteUrl.isEmpty()){
                     siteUrl = "/";
                 }
             }
         }
-
-        Site siteId = siteRepository.getSiteByUrl(mainSiteUrl);
-        String htmlPageCode = pageRepository.findBySiteIdAndPath(siteId, siteUrl).getContent();
-
-        HashMap<String, Float> lemmasMap = getAllLemmas(htmlPageCode);
-        saveToDB(lemmasMap);
     }
 
-
-    private void saveToDB(HashMap<String, Float> lemmasMap){
+    private void saveToDB(HashMap<String, Float> lemmasMap, Page page){
         for(String lemma : lemmasMap.keySet()){
-            Site site = siteRepository.getSiteByUrl(mainSiteUrl);
+            searchengine.modul.Site site = siteRepository.getSiteByUrl(mainSiteUrl);
             Lemma lemmaDB = lemmaRepository.findByLemmaAndSiteId(lemma, site);
-            Index index = new Index();
 
             if (lemmaDB == null){
                 lemmaDB = new Lemma();
@@ -75,10 +88,11 @@ public class IndexPageService {
                 lemmaDB.setSiteId(site);
             }
             lemmaDB.incrementFrequency();
-            index.setPageId(pageRepository.findBySiteIdAndPath(site, siteUrl));
+            lemmaRepository.save(lemmaDB);
+            Index index = new Index();
+            index.setPageId(page);
             index.setLemmaId(lemmaDB);
             index.setLemmaRank(lemmasMap.get(lemma));
-            lemmaRepository.save(lemmaDB);
             indexRepository.save(index);
         }
     }
@@ -135,14 +149,5 @@ public class IndexPageService {
             }
         }
         return false;
-    }
-
-    private boolean containsLemmaInSite(String lemma, Integer siteId) {
-        CopyOnWriteArrayList<Integer> sitesForWord = lemmasConcurrentMap.get(lemma);
-        boolean a;
-        if (sitesForWord!=null){
-            a = sitesForWord.contains(siteId);
-        }
-        return sitesForWord != null && sitesForWord.contains(siteId);
     }
 }

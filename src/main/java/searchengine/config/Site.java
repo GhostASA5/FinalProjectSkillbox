@@ -5,7 +5,7 @@ import lombok.Setter;
 
 @Setter
 @Getter
-public class SiteYAML {
+public class Site {
     private String url;
     private String name;
 }

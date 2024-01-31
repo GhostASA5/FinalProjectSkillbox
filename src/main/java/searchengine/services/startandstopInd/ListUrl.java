@@ -12,6 +12,7 @@ import java.util.concurrent.RecursiveAction;
 import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
+import org.jsoup.UnsupportedMimeTypeException;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
@@ -35,7 +36,8 @@ public class ListUrl extends RecursiveAction {
     private final IndexPageService indexPageService;
 
 
-    public ListUrl(Site site, Site mainSite, PageRepository pageRepository, SiteRepository siteRepository, IndexPageService indexPageService) {
+    public ListUrl(Site site, Site mainSite, PageRepository pageRepository,
+                   SiteRepository siteRepository, IndexPageService indexPageService) {
         this.site = site;
         this.mainSite = mainSite;
         this.pageRepository = pageRepository;
@@ -48,7 +50,7 @@ public class ListUrl extends RecursiveAction {
         String main = mainSite.getUrl();
         String url = site.getUrl();
         List<ListUrl> setUrlList = new ArrayList<>();
-        if (!StartAndStopIndexing.isActive()) {
+        if (!StartAndStopIndexingService.isActive()) {
             mainSite.setSiteStatus(SiteStatus.FAILED);
             mainSite.setLastError("Индексация остановлена пользователем");
             mainSite.setStatusTime(LocalDateTime.now());
@@ -74,7 +76,7 @@ public class ListUrl extends RecursiveAction {
                     pageRepository.save(page);
                     mainSite.setStatusTime(LocalDateTime.now());
                     siteRepository.save(mainSite);
-                    indexPageService.indexPage(url);
+                    indexPageService.indexPage(url, page);
                 }
                 elements = document.select(CSS_QUERY);
                 for (Element element : elements) {
@@ -94,29 +96,45 @@ public class ListUrl extends RecursiveAction {
                 }
 
             } catch (HttpStatusException ex) {
-                int statusCode = ex.getStatusCode();
-                String responseBody = ex.getMessage();
-                document = Jsoup.parse(responseBody);
-                page.setCode(statusCode);
-                page.setContent(document.outerHtml());
-                pageRepository.save(page);
-                mainSite.setStatusTime(LocalDateTime.now());
-                siteRepository.save(mainSite);
+                httpStatusException(ex, page);
+            } catch (MalformedURLException | UnsupportedMimeTypeException ex){
+                malformedURLException(page);
             } catch (Exception ex){
-                Thread.currentThread().interrupt();
-                String error = ex.getMessage();
-                ex.printStackTrace();
-                if(error.equals("Read timed out")){
-                    mainSite.setLastError("Индексация остановлена из-за долгого ответа сервера. Проверьте интернет соединение");
-                } else {
-                    mainSite.setLastError(error);
-                }
-                mainSite.setSiteStatus(SiteStatus.FAILED);
-                mainSite.setStatusTime(LocalDateTime.now());
-                siteRepository.save(mainSite);
+                //Thread.currentThread().interrupt();
+                simpleException(ex);
             }
-
         }
+    }
+
+    private void simpleException(Exception ex){
+        String error = ex.getMessage();
+        ex.printStackTrace();
+        if(error.equals("Read timed out")){
+            mainSite.setLastError("Индексация остановлена из-за долгого ответа сервера. Проверьте интернет соединение");
+        } else {
+            mainSite.setLastError(error);
+        }
+        mainSite.setSiteStatus(SiteStatus.FAILED);
+        mainSite.setStatusTime(LocalDateTime.now());
+        siteRepository.save(mainSite);
+    }
+
+    private void malformedURLException(Page page){
+        page.setCode(404);
+        page.setContent("");
+        pageRepository.save(page);
+        mainSite.setStatusTime(LocalDateTime.now());
+        siteRepository.save(mainSite);
+    }
+
+    private void httpStatusException(HttpStatusException ex, Page page){
+        int statusCode = ex.getStatusCode();
+        String responseBody = ex.getMessage();
+        page.setCode(statusCode);
+        page.setContent(Jsoup.parse(responseBody).outerHtml());
+        pageRepository.save(page);
+        mainSite.setStatusTime(LocalDateTime.now());
+        siteRepository.save(mainSite);
     }
 
     private boolean checkUrl(String url) {

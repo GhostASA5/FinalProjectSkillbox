@@ -2,10 +2,10 @@ package searchengine.services.startandstopInd;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import searchengine.config.SiteYAML;
+import searchengine.config.Site;
 import searchengine.config.SitesList;
 import searchengine.dto.startandstop.StartIndResponse;
-import searchengine.modul.Site;
+import searchengine.dto.startandstop.StopIndResponse;
 import searchengine.modul.SiteStatus;
 import searchengine.services.indexPage.IndexPageService;
 import searchengine.services.repository.IndexRepository;
@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.concurrent.*;
 
 @Service
-public class StartAndStopIndexing implements StartIndService{
+public class StartAndStopIndexingService implements StartIndService{
 
     private final SitesList sites;
     private int count = 3;
@@ -31,7 +31,7 @@ public class StartAndStopIndexing implements StartIndService{
     private final int numberOfCores = Runtime.getRuntime().availableProcessors();
 
     @Autowired
-    public StartAndStopIndexing(SitesList sites, SiteRepository siteRepository, PageRepository pageRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository, IndexPageService indexPageService) {
+    public StartAndStopIndexingService(SitesList sites, SiteRepository siteRepository, PageRepository pageRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository, IndexPageService indexPageService) {
         this.sites = sites;
         this.siteRepository = siteRepository;
         this.pageRepository = pageRepository;
@@ -42,9 +42,14 @@ public class StartAndStopIndexing implements StartIndService{
 
     @Override
     public StartIndResponse beginIndexing() {
-        startUpdate();
         StartIndResponse response = new StartIndResponse();
-        response.setResult(true);
+        if (isIndexing()){
+            response.setResult(false);
+            response.setError("Индексация уже запущена");
+        } else {
+            startUpdate();
+            response.setResult(true);
+        }
         return response;
     }
 
@@ -53,23 +58,25 @@ public class StartAndStopIndexing implements StartIndService{
         active = true;
         ListUrl.concurrentSet = ConcurrentHashMap.newKeySet();
         indexRepository.deleteAll();
-        List<SiteYAML> sitesList = sites.getSites();
-        for (SiteYAML siteYAML : sitesList) {
-            new Thread(() -> updateSite(siteYAML)).start();
+        List<Site> sitesList = sites.getSites();
+        for (Site site : sitesList) {
+            new Thread(() -> updateSite(site)).start();
         }
     }
 
-    private void updateSite(SiteYAML siteYAML){
-        Site oldSite = siteRepository.getSiteByName(siteYAML.getName());
-        lemmaRepository.deleteAllBySiteId(oldSite);
-        pageRepository.deleteAllBySiteId(oldSite);
-        siteRepository.delete(oldSite);
+    private void updateSite(Site site){
+        if (siteRepository.getSitesCount() != 0){
+            searchengine.modul.Site oldSite = siteRepository.getSiteByName(site.getName());
+            lemmaRepository.deleteAllBySiteId(oldSite);
+            pageRepository.deleteAllBySiteId(oldSite);
+            siteRepository.delete(oldSite);
+        }
 
-        Site newSite = new Site();
+        searchengine.modul.Site newSite = new searchengine.modul.Site();
         newSite.setSiteStatus(SiteStatus.INDEXING);
         newSite.setStatusTime(LocalDateTime.now());
-        newSite.setUrl(siteYAML.getUrl());
-        newSite.setName(siteYAML.getName());
+        newSite.setUrl(site.getUrl());
+        newSite.setName(site.getName());
         siteRepository.save(newSite);
 
         try(ForkJoinPool forkJoinPool = new ForkJoinPool(numberOfCores)){
@@ -85,8 +92,17 @@ public class StartAndStopIndexing implements StartIndService{
         count++;
     }
 
-    public void stopIndexing(){
-        active = false;
+    @Override
+    public StopIndResponse stopIndexing(){
+        StopIndResponse response = new StopIndResponse();
+        if (isIndexing()){
+            response.setResult(true);
+            active = false;
+        } else {
+            response.setResult(false);
+            response.setError("Индексация не запущена");
+        }
+        return response;
     }
 
     public static boolean isActive() {

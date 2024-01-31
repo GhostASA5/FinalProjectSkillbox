@@ -3,13 +3,13 @@ package searchengine.services.statistics;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import searchengine.config.SiteYAML;
+import searchengine.config.Site;
 import searchengine.config.SitesList;
 import searchengine.dto.statistics.DetailedStatisticsItem;
 import searchengine.dto.statistics.StatisticsData;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.dto.statistics.TotalStatistics;
-import searchengine.modul.Site;
+import searchengine.modul.Lemma;
 import searchengine.services.repository.SiteRepository;
 
 import java.time.ZoneOffset;
@@ -36,23 +36,29 @@ public class StatisticsServiceImpl implements StatisticsService {
         total.setIndexing(true);
 
         List<DetailedStatisticsItem> detailed = new ArrayList<>();
-        List<SiteYAML> sitesList = sites.getSites();
-        for (SiteYAML siteYAML : sitesList) {
-            Site site = siteRepository.getSiteByName(siteYAML.getName());
-            DetailedStatisticsItem item = new DetailedStatisticsItem();
-            item.setName(site.getName());
-            item.setUrl(site.getUrl());
+        List<Site> sitesList = sites.getSites();
+        if (siteRepository.getSitesCount() != 0){
+            for (Site siteYAML : sitesList) {
+                searchengine.modul.Site site = siteRepository.getSiteByName(siteYAML.getName());
+                DetailedStatisticsItem item = new DetailedStatisticsItem();
+                item.setName(site.getName());
+                item.setUrl(site.getUrl());
 
-            int pages = site.getPages().size();
-            int lemmas = pages * 10000;
-            item.setPages(pages);
-            item.setLemmas(lemmas);
-            item.setStatus(site.getSiteStatus().toString());
-            item.setError(site.getLastError());
-            item.setStatusTime(site.getStatusTime().toInstant(ZoneOffset.UTC).toEpochMilli());
-            total.setPages(total.getPages() + pages);
-            total.setLemmas(total.getLemmas() + lemmas);
-            detailed.add(item);
+                int pages = site.getPages().size();
+                int lemmas = site.getLemmas().stream().mapToInt(Lemma::getFrequency).sum();
+                item.setPages(pages);
+                item.setLemmas(lemmas);
+                item.setStatus(site.getSiteStatus().toString());
+                item.setError(site.getLastError());
+                item.setStatusTime(site.getStatusTime().toInstant(ZoneOffset.UTC).toEpochMilli());
+                total.setPages(total.getPages() + pages);
+                total.setLemmas(total.getLemmas() + lemmas);
+                detailed.add(item);
+            }
+        } else {
+            total.setPages(0);
+            total.setLemmas(0);
+            total.setSites(0);
         }
 
         StatisticsResponse response = new StatisticsResponse();
