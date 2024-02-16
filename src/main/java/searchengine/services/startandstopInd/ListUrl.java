@@ -16,6 +16,7 @@ import org.jsoup.UnsupportedMimeTypeException;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import searchengine.modul.Lemma;
 import searchengine.modul.Page;
 import searchengine.modul.Site;
 import searchengine.modul.SiteStatus;
@@ -34,15 +35,18 @@ public class ListUrl extends RecursiveAction {
     private final PageRepository pageRepository;
     private final SiteRepository siteRepository;
     private final IndexPageService indexPageService;
-
+    private final ConcurrentHashMap<String, Lemma> concurrentHashMap;
+    private final List<Page> pages;
 
     public ListUrl(Site site, Site mainSite, PageRepository pageRepository,
-                   SiteRepository siteRepository, IndexPageService indexPageService) {
+                   SiteRepository siteRepository, IndexPageService indexPageService, ConcurrentHashMap<String, Lemma> concurrentHashMap, List<Page> pages) {
         this.site = site;
         this.mainSite = mainSite;
         this.pageRepository = pageRepository;
         this.siteRepository = siteRepository;
         this.indexPageService = indexPageService;
+        this.concurrentHashMap = concurrentHashMap;
+        this.pages = pages;
     }
 
     @Override
@@ -76,8 +80,9 @@ public class ListUrl extends RecursiveAction {
                     pageRepository.save(page);
                     mainSite.setStatusTime(LocalDateTime.now());
                     siteRepository.save(mainSite);
-                    indexPageService.indexPage(url, page);
+                    pages.add(page);
                 }
+
                 elements = document.select(CSS_QUERY);
                 for (Element element : elements) {
                     String attributeUrl = element.absUrl(ATTRIBUTE_KEY);
@@ -85,10 +90,11 @@ public class ListUrl extends RecursiveAction {
                     newSite.setUrl(attributeUrl);
 
                     if (checkUrl(attributeUrl) && !concurrentSet.contains(attributeUrl)) {
-                        ListUrl setUrl = new ListUrl(newSite, mainSite, pageRepository, siteRepository, indexPageService);
+                        ListUrl setUrl = new ListUrl(newSite, mainSite, pageRepository, siteRepository, indexPageService, concurrentHashMap, pages);
                         setUrl.fork();
                         setUrlList.add(setUrl);
                         concurrentSet.add(attributeUrl);
+
                     }
                 }
                 for (ListUrl link : setUrlList) {
@@ -100,7 +106,6 @@ public class ListUrl extends RecursiveAction {
             } catch (MalformedURLException | UnsupportedMimeTypeException ex){
                 malformedURLException(page);
             } catch (Exception ex){
-                //Thread.currentThread().interrupt();
                 simpleException(ex);
             }
         }

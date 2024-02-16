@@ -226,7 +226,6 @@ public class SearchServiceImpl implements SearchService {
             String[] newWorld = new String[target];
             System.arraycopy(words, index, newWorld, 0, target);
             if (Arrays.equals(newWorld, targets)){
-                //return element.text().toLowerCase().replace(query, "<b>" + query + "</b>");
                 return String.join(" ", Arrays.copyOfRange(words, start, end + 1)).toLowerCase()
                         .replace(query, "<b>" + query + "</b>");
             }

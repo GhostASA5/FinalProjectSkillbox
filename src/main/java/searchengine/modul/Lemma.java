@@ -23,7 +23,7 @@ public class Lemma {
     @Column(nullable = false)
     private Integer frequency;
 
-    @OneToMany(mappedBy = "lemmaId")
+    @OneToMany(mappedBy = "lemmaId", cascade = CascadeType.PERSIST)
     private List<Index> indices = new ArrayList<>();
 
     public void incrementFrequency(){

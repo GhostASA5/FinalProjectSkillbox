@@ -6,14 +6,18 @@ import searchengine.config.Site;
 import searchengine.config.SitesList;
 import searchengine.dto.startandstop.StartIndResponse;
 import searchengine.dto.startandstop.StopIndResponse;
+import searchengine.modul.Lemma;
+import searchengine.modul.Page;
 import searchengine.modul.SiteStatus;
 import searchengine.services.indexPage.IndexPageService;
+import searchengine.services.indexPage.IndexService;
 import searchengine.services.repository.IndexRepository;
 import searchengine.services.repository.LemmaRepository;
 import searchengine.services.repository.PageRepository;
 import searchengine.services.repository.SiteRepository;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 
@@ -28,16 +32,18 @@ public class StartAndStopIndexingService implements StartIndService{
     private final LemmaRepository lemmaRepository;
     private final IndexRepository indexRepository;
     private final IndexPageService indexPageService;
+    private final IndexService indexService;
     private final int numberOfCores = Runtime.getRuntime().availableProcessors();
 
     @Autowired
-    public StartAndStopIndexingService(SitesList sites, SiteRepository siteRepository, PageRepository pageRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository, IndexPageService indexPageService) {
+    public StartAndStopIndexingService(SitesList sites, SiteRepository siteRepository, PageRepository pageRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository, IndexPageService indexPageService, IndexService indexService) {
         this.sites = sites;
         this.siteRepository = siteRepository;
         this.pageRepository = pageRepository;
         this.lemmaRepository = lemmaRepository;
         this.indexRepository = indexRepository;
         this.indexPageService = indexPageService;
+        this.indexService = indexService;
     }
 
     @Override
@@ -57,7 +63,7 @@ public class StartAndStopIndexingService implements StartIndService{
         count = 0;
         active = true;
         ListUrl.concurrentSet = ConcurrentHashMap.newKeySet();
-        indexRepository.deleteAll();
+
         List<Site> sitesList = sites.getSites();
         for (Site site : sitesList) {
             new Thread(() -> updateSite(site)).start();
@@ -66,6 +72,7 @@ public class StartAndStopIndexingService implements StartIndService{
 
     private void updateSite(Site site){
         if (siteRepository.getSitesCount() != 0){
+            indexRepository.deleteAll();
             searchengine.modul.Site oldSite = siteRepository.getSiteByName(site.getName());
             lemmaRepository.deleteAllBySiteId(oldSite);
             pageRepository.deleteAllBySiteId(oldSite);
@@ -80,9 +87,14 @@ public class StartAndStopIndexingService implements StartIndService{
         siteRepository.save(newSite);
 
         try(ForkJoinPool forkJoinPool = new ForkJoinPool(numberOfCores)){
-            ListUrl listUrl = new ListUrl(newSite, newSite, pageRepository, siteRepository, indexPageService);
+            ConcurrentHashMap<String, Lemma> con = new ConcurrentHashMap<>();
+            List<Page> pages = new ArrayList<>();
+            ListUrl listUrl = new ListUrl(newSite, newSite, pageRepository, siteRepository, indexPageService, con, pages);
             forkJoinPool.invoke(listUrl);
+            indexPageService.indexSite(newSite, con);
+            //indexService.indexSite(newSite, con);
             if (newSite.getSiteStatus().equals(SiteStatus.INDEXING)){
+                newSite.setStatusTime(LocalDateTime.now());
                 newSite.setSiteStatus(SiteStatus.INDEXED);
                 siteRepository.save(newSite);
             }
