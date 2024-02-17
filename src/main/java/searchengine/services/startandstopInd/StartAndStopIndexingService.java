@@ -10,7 +10,6 @@ import searchengine.modul.Lemma;
 import searchengine.modul.Page;
 import searchengine.modul.SiteStatus;
 import searchengine.services.indexPage.IndexPageService;
-import searchengine.services.indexPage.IndexService;
 import searchengine.services.repository.IndexRepository;
 import searchengine.services.repository.LemmaRepository;
 import searchengine.services.repository.PageRepository;
@@ -32,18 +31,16 @@ public class StartAndStopIndexingService implements StartIndService{
     private final LemmaRepository lemmaRepository;
     private final IndexRepository indexRepository;
     private final IndexPageService indexPageService;
-    private final IndexService indexService;
     private final int numberOfCores = Runtime.getRuntime().availableProcessors();
 
     @Autowired
-    public StartAndStopIndexingService(SitesList sites, SiteRepository siteRepository, PageRepository pageRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository, IndexPageService indexPageService, IndexService indexService) {
+    public StartAndStopIndexingService(SitesList sites, SiteRepository siteRepository, PageRepository pageRepository, LemmaRepository lemmaRepository, IndexRepository indexRepository, IndexPageService indexPageService) {
         this.sites = sites;
         this.siteRepository = siteRepository;
         this.pageRepository = pageRepository;
         this.lemmaRepository = lemmaRepository;
         this.indexRepository = indexRepository;
         this.indexPageService = indexPageService;
-        this.indexService = indexService;
     }
 
     @Override
@@ -92,7 +89,6 @@ public class StartAndStopIndexingService implements StartIndService{
             ListUrl listUrl = new ListUrl(newSite, newSite, pageRepository, siteRepository, indexPageService, con, pages);
             forkJoinPool.invoke(listUrl);
             indexPageService.indexSite(newSite, con);
-            //indexService.indexSite(newSite, con);
             if (newSite.getSiteStatus().equals(SiteStatus.INDEXING)){
                 newSite.setStatusTime(LocalDateTime.now());
                 newSite.setSiteStatus(SiteStatus.INDEXED);
