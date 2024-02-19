@@ -135,8 +135,12 @@ public class IndexPageService implements IndexService{
                 HashMap<String, Float> lemmasMap = getAllLemmas(htmlPageCode);
                 List<Index> indices = new ArrayList<>();
                 executorService.submit(() -> updateLemmas(lemmasMap, concurrentHashMap, site, indices, page));
-                lemmaRepository.saveAll(concurrentHashMap.values());
-                indexRepository.saveAll(indices);
+                try{
+                    lemmaRepository.saveAll(concurrentHashMap.values());
+                    indexRepository.saveAll(indices);
+                } catch (Exception ignored){
+                }
+
             } else {
                 break;
             }

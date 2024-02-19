@@ -59,6 +59,8 @@ public class ListUrl extends RecursiveAction {
             mainSite.setLastError("Индексация остановлена пользователем");
             mainSite.setStatusTime(LocalDateTime.now());
             siteRepository.save(mainSite);
+        } else if (mainSite.getSiteStatus().equals(SiteStatus.FAILED)){
+
         } else {
             String urlPart = url.replace(main, "");
             Elements elements;

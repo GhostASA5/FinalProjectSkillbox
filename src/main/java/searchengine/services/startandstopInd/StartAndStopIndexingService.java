@@ -88,8 +88,8 @@ public class StartAndStopIndexingService implements StartIndService{
             List<Page> pages = new ArrayList<>();
             ListUrl listUrl = new ListUrl(newSite, newSite, pageRepository, siteRepository, indexPageService, con, pages);
             forkJoinPool.invoke(listUrl);
-            indexPageService.indexSite(newSite, con);
-            if (newSite.getSiteStatus().equals(SiteStatus.INDEXING)){
+            if (!newSite.getSiteStatus().equals(SiteStatus.FAILED)){
+                indexPageService.indexSite(newSite, con);
                 newSite.setStatusTime(LocalDateTime.now());
                 newSite.setSiteStatus(SiteStatus.INDEXED);
                 siteRepository.save(newSite);
